@@ -6,6 +6,7 @@
 
 import os
 import os.path as osp
+import sys
 import tempfile
 import shutil
 import logging
@@ -103,6 +104,7 @@ class PiApplication(object):
         self._multipress_timer = PoolingTimer(config.getfloat('CONTROLS', 'multi_press_delay'), False)
         self._fingerdown_events = []
         self._escape_held = False
+        self._restart = False
 
         # Define states of the application
         self._machine = StateMachine(self._pm, self._config, self, self._window)
@@ -293,6 +295,14 @@ class PiApplication(object):
             self._escape_held = False
         return None
 
+    def find_reload_event(self, events):
+        """Return the first found event if found in the list.
+        """
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                return event
+        return None
+
     def find_fullscreen_event(self, events):
         """Return the first found event if found in the list.
         """
@@ -387,6 +397,10 @@ class PiApplication(object):
                 if self.find_quit_event(events):
                     break
 
+                if not self._menu and self.find_reload_event(events):
+                    self._restart = True
+                    break
+
                 if self.find_fullscreen_event(events):
                     self._window.toggle_fullscreen()
 
@@ -421,6 +435,11 @@ class PiApplication(object):
         finally:
             self._pm.hook.pibooth_cleanup(app=self)
             pygame.quit()
+
+        if self._restart:
+            LOGGER.info("Restarting pibooth ...")
+            # Replace the process to reload the code, plugins and configuration
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
 def main():
